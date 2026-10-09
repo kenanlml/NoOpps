@@ -25,7 +25,7 @@ configs/syslog-ng/       collector.conf, client-ids.conf, client-web.conf
 configs/elasticsearch/   template d'index, rôles syslog-ng et lecture seule
 kibana/                  export du dashboard (dashboard.ndjson)
 scripts/                 setup-elasticsearch.sh, install-collector.sh,
-                         create-data-views.sh, create-viewer.sh,
+                         create-data-views.sh, create-viewer.sh, demo-data.py,
                          import-dashboard.sh
 docs/                    architecture, installation, visualisation
 screenshots/             captures Kibana

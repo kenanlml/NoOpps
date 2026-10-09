@@ -149,14 +149,14 @@ Dans la data view `ids-alerts`, `src_ip` et `dest_ip` sont de type `ip`, `@times
 
 ### Import du dashboard
 
-Le dashboard sera construit dans Kibana quand de vraies alertes arriveront, puis exporté (Stack Management > Saved objects > Export, avec les objets liés) dans `kibana/dashboard.ndjson`. Pour l'importer sur une autre instance :
+Le dashboard est exporté dans `kibana/dashboard.ndjson` (détail des panneaux dans [visualisation.md](../visualisation.md)). Pour l'importer sur une autre instance :
 
 ```bash
 ./scripts/import-dashboard.sh                    # kibana/dashboard.ndjson par défaut
 ./scripts/import-dashboard.sh autre-fichier.ndjson
 ```
 
-Le script utilise `POST /api/saved_objects/_import?overwrite=true`. Testé en réimportant un export des trois data views (`"successCount":3,"success":true`).
+Le script utilise `POST /api/saved_objects/_import?overwrite=true`. Import de `kibana/dashboard.ndjson` testé : `"success":true`, 12 objets.
 
 ## 5. Utilisateur Kibana en lecture seule
 

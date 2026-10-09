@@ -125,3 +125,53 @@ En cas de problème, syslog-ng écrit ses erreurs dans `/var/log/syslog` :
 ```bash
 grep 'syslog-ng\[' /var/log/syslog | tail
 ```
+
+## 2. Clients
+
+Les VM IDS et serveur web envoient leurs logs au collecteur avec syslog-ng, en RFC 5424 sur 601/tcp vers `100.80.61.14`.
+
+| Fichier                              | VM            | Contenu envoyé                                        |
+|--------------------------------------|---------------|-------------------------------------------------------|
+| `configs/syslog-ng/client-ids.conf`  | IDS           | alertes Snort 3 (`alert_json.txt`) ou Suricata (`eve.json`) |
+| `configs/syslog-ng/client-web.conf`  | serveur web   | `access.log`, `error.log` d'Apache, `auth.log`        |
+
+### Installation
+
+```bash
+sudo apt-get install -y syslog-ng-core
+sudo cp client-ids.conf /etc/syslog-ng/conf.d/      # ou client-web.conf
+sudo sed -i 's/COLLECTOR_IP/100.80.61.14/' /etc/syslog-ng/conf.d/client-*.conf
+sudo syslog-ng --syntax-only && sudo systemctl restart syslog-ng
+```
+
+Sur le client, `syslog-ng-core` suffit (ni `syslog-ng-scl` ni `syslog-ng-mod-http`). Comme sur le collecteur, il remplace `rsyslog`, et `auth.log` continue d'être écrit par la config Ubuntu par défaut.
+
+Pour `client-ids.conf`, décommenter le bloc qui correspond à l'IDS utilisé.
+
+### Choix
+
+- **Programme.** Les lignes JSON de l'IDS et les logs Apache n'ont pas d'en-tête syslog. Elles sont lues telles quelles (`flags(no-parse)`) et `program-override()` leur donne le nom (`snort`, `suricata`, `apache-access`, `apache-error`) qui sert au routage côté collecteur. `auth.log` est au format syslog et garde son programme d'origine (`sshd`, `sudo`...).
+- **Snort 3.** Les champs par défaut d'`alert_json` ne contiennent ni les adresses IP ni le message de la règle. Le bloc indique la liste `fields` à mettre dans `snort.lua`.
+- **Suricata.** `eve.json` contient aussi les événements `flow`, `dns`, `http`, etc. Un filtre n'envoie que les lignes `"event_type":"alert"`. Avec `type(string)`, `message()` compare le message entier, d'où `flags(substring)`.
+- **Disk-buffer** de 256 Mo par destination, pour ne pas perdre les logs si le collecteur ou Tailscale est indisponible.
+- **`persist-name()`.** Les deux destinations visent le même hôte et le même port. Sans nom distinct, syslog-ng refuse de démarrer si les deux fichiers sont chargés sur la même VM (IDS installé sur le serveur web, par exemple).
+
+### Vérification
+
+Test sur la VM `siem-ids` : une instance syslog-ng sans root charge les deux configs (blocs Snort et Suricata décommentés, chemins vers des fichiers temporaires) et envoie au collecteur par l'IP Tailscale. Une ligne est ajoutée à chaque fichier, plus un événement `flow` Suricata qui ne doit pas arriver.
+
+```
+ids-alerts-2026.10.09  {"src_ip": "10.30.0.6", "signature": "CLIENT2 suricata xss", "program": "suricata", "priority": "1", "dest_ip": "10.30.0.20", "classification": "Web Application Attack"}
+ids-alerts-2026.10.09  {"src_ip": "10.30.0.5", "signature": "CLIENT2 snort ssh scan", "program": "snort", "priority": "2", "dest_ip": "10.30.0.20", "classification": "attempted-recon"}
+web-2026.10.09         {"src_ip": "10.30.0.7", "program": "apache-access", "http_status": "200", ...}
+web-2026.10.09         {"program": "apache-error", "message": "[Fri Oct 09 20:55:04.000000 2026] [php:error] ... CLIENT2 PHP error"}
+syslog-2026.10.09      {"program": "sshd", "message": "Failed password for root from 10.30.0.8 port 50000 ssh2 CLIENT2"}
+```
+
+L'événement `flow` n'apparaît pas.
+
+Sur une VM cliente, vérifier la connexion vers le collecteur :
+
+```bash
+ss -tn dst 100.80.61.14:601     # une connexion ESTAB
+```

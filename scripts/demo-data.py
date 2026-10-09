@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Données de démo sur 24 h pour construire le dashboard sans vraies alertes.
+"""Données de démo sur 24 h et dashboard de démo pour visualiser sans vraies alertes.
 
 Les documents ont la même forme que ceux produits par le collecteur syslog-ng
 (alertes Suricata normalisées, logs Apache parsés, syslog) et vont dans des
-index demo-ids-alerts-*, demo-web-* et demo-syslog-*.
+index demo-ids-alerts-*, demo-web-* et demo-syslog-*. Le dashboard de démo est
+une copie de kibana/dashboard.ndjson qui pointe vers la data view demo-ids-alerts.
 
-    ./scripts/demo-data.py load
-    ./scripts/demo-data.py delete
+    ./scripts/demo-data.py load     # (re)crée les index et le dashboard de démo
+    ./scripts/demo-data.py delete   # supprime les index et les objets Kibana de démo
 """
 import base64
 import json
@@ -19,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ES = "http://127.0.0.1:9200"
+KIBANA = "http://127.0.0.1:5601"
 PREFIXES = ("demo-ids-alerts", "demo-web", "demo-syslog")
 
 IDS_HOST = "ids-sensor"
@@ -37,15 +39,20 @@ def env():
     return values
 
 
-def request(method, path, body=None, ndjson=False):
+def request(method, path, body=None, ndjson=False, base=ES, content_type=None):
     auth = base64.b64encode(f"elastic:{env()['ELASTIC_PASSWORD']}".encode()).decode()
-    data = body.encode() if isinstance(body, str) else (json.dumps(body).encode() if body else None)
-    req = urllib.request.Request(ES + path, data=data, method=method)
+    if isinstance(body, bytes):
+        data = body
+    else:
+        data = body.encode() if isinstance(body, str) else (json.dumps(body).encode() if body else None)
+    req = urllib.request.Request(base + path, data=data, method=method)
     req.add_header("Authorization", "Basic " + auth)
-    req.add_header("Content-Type", "application/x-ndjson" if ndjson else "application/json")
+    req.add_header("kbn-xsrf", "true")
+    req.add_header("Content-Type", content_type or ("application/x-ndjson" if ndjson else "application/json"))
     try:
         with urllib.request.urlopen(req) as r:
-            return json.load(r)
+            text = r.read()
+            return json.loads(text) if text else {}
     except urllib.error.HTTPError as e:
         if e.code == 404 and method == "DELETE":
             return {}
@@ -284,7 +291,41 @@ def generate(start):
     return ids, web, sys_
 
 
+def demo_saved_objects():
+    """Copie du dashboard réel : id préfixés par demo-, data view sur demo-ids-alerts-*."""
+    objects = []
+    for line in (ROOT / "kibana/dashboard.ndjson").read_text().splitlines():
+        o = json.loads(line)
+        o["id"] = "demo-" + o["id"]
+        for ref in o.get("references", []):
+            ref["id"] = "demo-" + ref["id"]
+        a = o["attributes"]
+        if o["type"] == "index-pattern":
+            a["title"] = "demo-" + a["title"]
+            a["name"] = "Démo : " + a.get("name", a["title"])
+        elif o["type"] == "dashboard":
+            a["title"] = "SIEM - Démo (données fictives)"
+            a["description"] = "Copie du dashboard SIEM sur les index demo-*, générés par scripts/demo-data.py."
+        else:
+            a["title"] = "[Démo] " + a["title"]
+        objects.append(o)
+    return objects
+
+
+def load_dashboard():
+    body = "\n".join(json.dumps(o) for o in demo_saved_objects()).encode()
+    boundary = "demo" + str(rnd.randrange(10**12))
+    form = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"demo.ndjson\"\r\n"
+            f"Content-Type: application/ndjson\r\n\r\n").encode() + body + f"\r\n--{boundary}--\r\n".encode()
+    r = request("POST", "/api/saved_objects/_import?overwrite=true", form, base=KIBANA,
+                content_type=f"multipart/form-data; boundary={boundary}")
+    if not r.get("success"):
+        raise SystemExit(f"import du dashboard de démo : {r}")
+    print(f"dashboard de démo : {KIBANA}/app/dashboards#/view/demo-siem-dashboard ({r['successCount']} objets)")
+
+
 def load():
+    delete()
     template = json.loads((ROOT / "configs/elasticsearch/index-template.json").read_text())["template"]
     end = datetime.now(timezone.utc)
     start = end - timedelta(hours=24)
@@ -303,6 +344,7 @@ def load():
                 err = next(it["index"]["error"] for it in r["items"] if "error" in it["index"])
                 raise SystemExit(f"erreur bulk : {err}")
         print(f"{prefix}: {len(docs)} documents ({', '.join(days)})")
+    load_dashboard()
 
 
 def delete():
@@ -311,6 +353,10 @@ def delete():
         for n in names:
             request("DELETE", f"/{n['index']}")
             print(f"supprimé : {n['index']}")
+    for o in demo_saved_objects():
+        path = (f"/api/data_views/data_view/{o['id']}" if o["type"] == "index-pattern"
+                else f"/api/saved_objects/{o['type']}/{o['id']}")
+        request("DELETE", path, base=KIBANA)
 
 
 if __name__ == "__main__":

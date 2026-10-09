@@ -56,13 +56,15 @@ Le dashboard a été construit sur des données générées par `scripts/demo-da
 S'y ajoute un bruit de fond : navigation web depuis le LAN, pings de supervision toutes les 5 minutes, CRON, connexions SSH d'administration. Les adresses externes sont dans les plages réservées à la documentation (RFC 5737).
 
 ```bash
-./scripts/demo-data.py load     # crée les index demo-*
-./scripts/demo-data.py delete   # les supprime
+./scripts/demo-data.py load     # (re)crée les index demo-* et le dashboard de démo
+./scripts/demo-data.py delete   # supprime les index et les objets Kibana de démo
 ```
 
-Les data views ne couvrent que les vrais index. Pour revoir le dashboard sur les données de démo, il faut ajouter temporairement le motif dans la data view (`ids-alerts-*,demo-ids-alerts-*`). Le compte `equipe` n'a pas accès aux index `demo-*`.
+`load` importe aussi un dashboard « SIEM - Démo (données fictives) », copie de `kibana/dashboard.ndjson` construite au moment du chargement : les id sont préfixés par `demo-` et la data view `demo-ids-alerts` pointe vers `demo-ids-alerts-*`. Le dashboard réel et ses data views ne sont pas modifiés. Comme la copie est faite à partir de l'export, une modification du dashboard réel se retrouve dans la démo au `load` suivant.
 
-Les index de démo ont été supprimés après l'export du dashboard.
+Les données sont générées sur les 24 h précédant le `load`. Il faut le relancer pour retrouver un dashboard rempli sur la période « Last 24 hours ».
+
+Le compte `equipe` n'a pas accès aux index `demo-*` : le dashboard de démo s'affiche vide avec ce compte.
 
 ## Captures
 

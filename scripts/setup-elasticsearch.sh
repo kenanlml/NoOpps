@@ -17,3 +17,14 @@ es -X PUT "$ES/_security/role/syslog_ng_writer" --data-binary "@$CFG/role-syslog
 es -X PUT "$ES/_security/user/syslog_ng" \
   -d "{\"password\":\"${SYSLOG_NG_PASSWORD}\",\"roles\":[\"syslog_ng_writer\"],\"full_name\":\"syslog-ng collecteur\"}"
 es -X PUT "$ES/_index_template/siem" --data-binary "@$CFG/index-template.json"
+
+# Index vides : sans index correspondant, les data views n'ont aucun champ et le
+# dashboard affiche "Field @timestamp was not found" tant qu'aucun log n'est arrivé.
+for idx in ids-alerts-init web-init syslog-init; do
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -u "elastic:${ELASTIC_PASSWORD}" -I "$ES/$idx")
+  if [ "$code" = 404 ]; then
+    es -X PUT "$ES/$idx"
+  else
+    echo "$idx existe déjà"
+  fi
+done

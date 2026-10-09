@@ -111,7 +111,11 @@ Le mot de passe de `syslog_ng` est dans `.env` (`SYSLOG_NG_PASSWORD`). Le script
 # {"role":{"created":true}}
 # {"created":true}
 # {"acknowledged":true}
+# {"acknowledged":true,"shards_acknowledged":true,"index":"ids-alerts-init"}
+# (idem pour web-init et syslog-init)
 ```
+
+Le script crée aussi trois index vides, `ids-alerts-init`, `web-init` et `syslog-init`, qui reçoivent le mapping du template. Sans index correspondant à leur motif, les data views n'ont aucun champ et le dashboard affiche `Field @timestamp was not found` tant qu'aucun log n'est arrivé. Ces index ne contiennent aucun document et ne faussent pas les comptages.
 
 ### Vérification des droits
 

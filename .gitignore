@@ -1,0 +1,9 @@
+.env
+*.pem
+*.crt
+*.key
+*.p12
+certs/
+esdata/
+kibanadata/
+*.log

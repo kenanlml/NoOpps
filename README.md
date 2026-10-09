@@ -22,10 +22,11 @@ Schéma détaillé : [docs/architecture.md](docs/architecture.md).
 
 ```
 configs/syslog-ng/       collector.conf, client-ids.conf, client-web.conf
-configs/elasticsearch/   template d'index, rôle de l'utilisateur syslog-ng
+configs/elasticsearch/   template d'index, rôles syslog-ng et lecture seule
 kibana/                  export du dashboard (dashboard.ndjson)
 scripts/                 setup-elasticsearch.sh, install-collector.sh,
-                         create-data-views.sh, import-dashboard.sh
+                         create-data-views.sh, create-viewer.sh,
+                         import-dashboard.sh
 docs/                    architecture, installation, visualisation
 screenshots/             captures Kibana
 docker-compose.yml       Elasticsearch et Kibana
@@ -41,6 +42,7 @@ docker compose up -d
 sudo apt-get install -y syslog-ng-core syslog-ng-mod-http syslog-ng-scl
 sudo ./scripts/install-collector.sh
 ./scripts/create-data-views.sh
+./scripts/create-viewer.sh             # compte Kibana lecture seule de l'équipe
 ```
 
 Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://localhost:5601`.

@@ -157,3 +157,37 @@ Le dashboard sera construit dans Kibana quand de vraies alertes arriveront, puis
 ```
 
 Le script utilise `POST /api/saved_objects/_import?overwrite=true`. Testé en réimportant un export des trois data views (`"successCount":3,"success":true`).
+
+## 5. Utilisateur Kibana en lecture seule
+
+L'équipe consulte Kibana avec un compte en lecture seule plutôt qu'avec `elastic`. Les identifiants sont dans `.env` (`KIBANA_VIEWER_USER`, par défaut `equipe`, et `KIBANA_VIEWER_PASSWORD`).
+
+Le rôle `siem_viewer` (`configs/elasticsearch/role-siem-viewer.json`) donne :
+
+- côté Elasticsearch : `read` et `view_index_metadata` sur `ids-alerts-*`, `web-*` et `syslog-*`, aucun privilège cluster ;
+- côté Kibana, dans tous les espaces : Dashboard, Discover et Visualize en lecture. Les autres fonctionnalités (Stack Management, règles d'alerte, Dev Tools...) ne sont pas accessibles.
+
+Le rôle est créé par l'API Kibana (`PUT /api/security/role/siem_viewer`) : l'API Elasticsearch ne gère pas les privilèges par fonctionnalité Kibana. L'utilisateur est créé par l'API Elasticsearch.
+
+```bash
+./scripts/create-viewer.sh
+# rôle siem_viewer : 204
+# {"created":true}
+```
+
+### Vérification
+
+Avec le compte `equipe`, sur un index de test `syslog-2000.01.01` supprimé ensuite :
+
+| Action                                   | Code |
+|------------------------------------------|------|
+| recherche dans `syslog-*`                | 200  |
+| écriture dans `syslog-*`                 | 403  |
+| suppression d'un index                   | 403  |
+| lecture de `.kibana`                     | 403  |
+| liste des utilisateurs Elasticsearch     | 403  |
+| liste des data views (Kibana)            | 200  |
+| liste des dashboards (Kibana)            | 200  |
+| création d'un dashboard                  | 403  |
+| création ou suppression d'une data view  | 403  |
+| gestion des rôles                        | 403  |

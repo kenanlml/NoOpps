@@ -1,0 +1,22 @@
+{
+  "elasticsearch": {
+    "cluster": [],
+    "indices": [
+      {
+        "names": ["ids-alerts-*", "web-*", "syslog-*"],
+        "privileges": ["read", "view_index_metadata"]
+      }
+    ]
+  },
+  "kibana": [
+    {
+      "base": [],
+      "feature": {
+        "dashboard": ["read"],
+        "discover": ["read"],
+        "visualize": ["read"]
+      },
+      "spaces": ["*"]
+    }
+  ]
+}

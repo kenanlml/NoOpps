@@ -123,3 +123,37 @@ curl -s -u "$U" -H 'Content-Type: application/json' -X POST http://127.0.0.1:920
 curl -s -u "$U" http://127.0.0.1:9200/syslog-2000.01.01/_search -o /dev/null -w '%{http_code}\n'                                                         # 403
 curl -s -u "$U" -X DELETE http://127.0.0.1:9200/syslog-2000.01.01 -o /dev/null -w '%{http_code}\n'                                                       # 403
 ```
+
+## 4. Kibana : data views et dashboard
+
+### Data views
+
+`scripts/create-data-views.sh` crée une data view par famille d'index via l'API Kibana, avec `@timestamp` comme champ de temps :
+
+| id           | Motif           | Nom          |
+|--------------|-----------------|--------------|
+| `ids-alerts` | `ids-alerts-*`  | Alertes IDS  |
+| `web`        | `web-*`         | Logs web     |
+| `syslog`     | `syslog-*`      | Syslog       |
+
+Les id sont fixés pour que le dashboard exporté (`kibana/dashboard.ndjson`) pointe toujours vers les mêmes data views, même après une réinstallation. Le script peut être relancé (`override: true`).
+
+```bash
+./scripts/create-data-views.sh
+# Alertes IDS (ids-alerts-*): 200
+# Logs web (web-*): 200
+# Syslog (syslog-*): 200
+```
+
+Dans la data view `ids-alerts`, `src_ip` et `dest_ip` sont de type `ip`, `@timestamp` de type `date`.
+
+### Import du dashboard
+
+Le dashboard sera construit dans Kibana quand de vraies alertes arriveront, puis exporté (Stack Management > Saved objects > Export, avec les objets liés) dans `kibana/dashboard.ndjson`. Pour l'importer sur une autre instance :
+
+```bash
+./scripts/import-dashboard.sh                    # kibana/dashboard.ndjson par défaut
+./scripts/import-dashboard.sh autre-fichier.ndjson
+```
+
+Le script utilise `POST /api/saved_objects/_import?overwrite=true`. Testé en réimportant un export des trois data views (`"successCount":3,"success":true`).

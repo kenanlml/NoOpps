@@ -78,10 +78,10 @@ ss -ltn | grep -E ':(9200|5601)\b'
 
 ### Accès à Kibana
 
-Depuis le poste de travail, avec le port 2222 de l'hôte redirigé vers le SSH de la VM :
+Depuis le poste de travail, par SSH sur l'IP Tailscale de la VM :
 
 ```bash
-ssh -p 2222 -L 5601:127.0.0.1:5601 kenan@<hote>
+ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14
 ```
 
 Puis ouvrir `http://localhost:5601` et se connecter avec `elastic`.

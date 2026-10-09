@@ -43,7 +43,7 @@ sudo ./scripts/install-collector.sh
 ./scripts/create-data-views.sh
 ```
 
-Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@<vm>` puis `http://localhost:5601`.
+Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://localhost:5601`.
 
 ## Documentation
 

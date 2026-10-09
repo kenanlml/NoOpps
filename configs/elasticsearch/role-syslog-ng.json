@@ -1,0 +1,9 @@
+{
+  "cluster": [],
+  "indices": [
+    {
+      "names": ["ids-alerts-*", "web-*", "syslog-*"],
+      "privileges": ["create_index", "index"]
+    }
+  ]
+}

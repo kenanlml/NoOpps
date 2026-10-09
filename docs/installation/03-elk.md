@@ -85,3 +85,41 @@ ssh -p 2222 -L 5601:127.0.0.1:5601 kenan@<hote>
 ```
 
 Puis ouvrir `http://localhost:5601` et se connecter avec `elastic`.
+
+## 3. Utilisateur syslog-ng et template d'index
+
+syslog-ng n'utilise pas le compte `elastic`. Il dispose d'un utilisateur dédié, `syslog_ng`, avec le rôle `syslog_ng_writer` (`configs/elasticsearch/role-syslog-ng.json`) :
+
+- aucun privilège cluster ;
+- `create_index` et `index` sur `ids-alerts-*`, `web-*` et `syslog-*` uniquement.
+
+Le privilège `index` est nécessaire car `elasticsearch-http()` envoie des actions `index` dans le bulk (`create_doc` ne suffit pas).
+
+Le template `siem` (`configs/elasticsearch/index-template.json`) s'applique aux trois motifs d'index :
+
+- `number_of_replicas: 0` : un seul nœud, sinon les index restent en jaune ;
+- `src_ip` et `dest_ip` en type `ip`, ce qui permet les recherches par sous-réseau (`src_ip:"10.10.0.0/24"`) ;
+- `@timestamp` en `date`, champ de temps des data views Kibana ;
+- `host`, `program`, `signature`, `classification`, etc. en `keyword` pour les agrégations ;
+- `raw` contient le JSON d'origine de l'IDS, en mapping dynamique ;
+- `date_detection` désactivé : les horodatages Snort (`10/09-20:40:01.123456`) et Suricata (ISO 8601) dans `raw` provoqueraient sinon des conflits de type.
+
+Le mot de passe de `syslog_ng` est dans `.env` (`SYSLOG_NG_PASSWORD`). Le script `scripts/setup-elasticsearch.sh` crée le rôle, l'utilisateur et le template :
+
+```bash
+./scripts/setup-elasticsearch.sh
+# {"role":{"created":true}}
+# {"created":true}
+# {"acknowledged":true}
+```
+
+### Vérification des droits
+
+```bash
+set -a; . ./.env; set +a
+U="syslog_ng:$SYSLOG_NG_PASSWORD"
+curl -s -u "$U" -H 'Content-Type: application/json' -X POST http://127.0.0.1:9200/syslog-2000.01.01/_doc -d '{"message":"t"}' -o /dev/null -w '%{http_code}\n'   # 201
+curl -s -u "$U" -H 'Content-Type: application/json' -X POST http://127.0.0.1:9200/autre/_doc -d '{"a":1}' -o /dev/null -w '%{http_code}\n'               # 403
+curl -s -u "$U" http://127.0.0.1:9200/syslog-2000.01.01/_search -o /dev/null -w '%{http_code}\n'                                                         # 403
+curl -s -u "$U" -X DELETE http://127.0.0.1:9200/syslog-2000.01.01 -o /dev/null -w '%{http_code}\n'                                                       # 403
+```

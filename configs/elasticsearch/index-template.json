@@ -1,0 +1,36 @@
+{
+  "index_patterns": ["ids-alerts-*", "web-*", "syslog-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "date_detection": false,
+      "numeric_detection": false,
+      "properties": {
+        "@timestamp":     { "type": "date" },
+        "host":           { "type": "keyword" },
+        "program":        { "type": "keyword" },
+        "facility":       { "type": "keyword" },
+        "severity":       { "type": "keyword" },
+        "message":        { "type": "text" },
+        "src_ip":         { "type": "ip" },
+        "dest_ip":        { "type": "ip" },
+        "src_port":       { "type": "integer" },
+        "dest_port":      { "type": "integer" },
+        "proto":          { "type": "keyword" },
+        "signature":      { "type": "keyword", "fields": { "text": { "type": "text" } } },
+        "signature_id":   { "type": "long" },
+        "priority":       { "type": "integer" },
+        "classification": { "type": "keyword" },
+        "http_method":    { "type": "keyword" },
+        "url":            { "type": "keyword", "fields": { "text": { "type": "text" } } },
+        "http_status":    { "type": "integer" },
+        "user_agent":     { "type": "keyword" },
+        "raw":            { "type": "object", "dynamic": true }
+      }
+    }
+  }
+}

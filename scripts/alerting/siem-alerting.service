@@ -1,0 +1,15 @@
+[Unit]
+Description=NoOpps - surveillance et notifications IDS
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/home/kenan/siem-repo/.env
+WorkingDirectory=/home/kenan/siem-repo
+ExecStart=/usr/bin/python3 /home/kenan/siem-repo/scripts/alerting/watch-alerts.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

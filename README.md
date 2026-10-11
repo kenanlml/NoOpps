@@ -27,6 +27,8 @@ kibana/                  export du dashboard (dashboard.ndjson)
 scripts/                 setup-elasticsearch.sh, install-collector.sh,
                          create-data-views.sh, create-viewer.sh, demo-data.py,
                          import-dashboard.sh
+scripts/alerting/        watch-alerts.py, siem-alerting.service (notifications Discord)
+scripts/alerting/        watch-alerts.py, siem-alerting.service (notifications Discord)
 docs/                    architecture, installation, visualisation
 screenshots/             captures Kibana
 docker-compose.yml       Elasticsearch et Kibana
@@ -72,4 +74,34 @@ Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://
 
 ## Alertes et notifications
 
-> À compléter (partie notifications).
+
+Le script `scripts/alerting/watch-alerts.py` interroge Elasticsearch toutes les 30 s et envoie une notification sur un salon Discord (webhook) pour chaque alerte jugée critique.
+
+**Ce qui déclenche une notification**
+- alerte de l'index `ids-alerts-*` avec `priority <= ALERT_PRIORITY_THRESHOLD` (1 par défaut, la priorité la plus haute de Snort) ;
+- déduplication : une même paire (signature, IP source) n'est notifiée qu'une fois toutes les `ALERT_DEDUP_MINUTES` (10 min), pour éviter d'inonder le salon pendant un scan ou un flood.
+
+Le message contient la signature, l'horodatage, la source, la cible, la priorité, le SID, la classification et l'action recommandée.
+
+**Installation**
+
+```bash
+# 1. Rôle et utilisateur Elasticsearch en lecture seule
+curl -u "elastic:$ELASTIC_PASSWORD" -X PUT http://127.0.0.1:9200/_security/role/alert_reader_role \
+  -H 'Content-Type: application/json' \
+  -d '{"indices":[{"names":["ids-alerts-*"],"privileges":["read","view_index_metadata"]}]}'
+curl -u "elastic:$ELASTIC_PASSWORD" -X PUT http://127.0.0.1:9200/_security/user/alert_reader \
+  -H 'Content-Type: application/json' \
+  -d "{\"password\":\"$ELASTIC_ALERT_PASSWORD\",\"roles\":[\"alert_reader_role\"]}"
+
+# 2. Renseigner ELASTIC_ALERT_* et DISCORD_WEBHOOK_URL dans .env
+
+# 3. Service systemd
+sudo cp scripts/alerting/siem-alerting.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now siem-alerting.service
+journalctl -u siem-alerting.service -f
+```
+
+**Test** : indexer une alerte factice de priorité 1 dans `ids-alerts-test` avec l'utilisateur `elastic`. La notification arrive sur Discord en moins de 30 s. Supprimer ensuite l'index de test.
+

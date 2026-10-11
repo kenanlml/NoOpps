@@ -7,3 +7,4 @@ certs/
 esdata/
 kibanadata/
 *.log
+__pycache__/

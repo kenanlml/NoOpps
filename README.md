@@ -3,20 +3,20 @@
 Projet universitaire en équipe. Un IDS (Snort 3) détecte cinq scénarios d'intrusion. Ses alertes et les logs du serveur web victime sont centralisés par syslog-ng, stockés dans Elasticsearch et visualisés dans Kibana.
 
 ```
-IDS / serveur web  --syslog-ng (601/tcp)-->  collecteur syslog-ng  -->  Elasticsearch  -->  Kibana
+Snort 3 / serveur web (VM victime)  --syslog-ng (TCP)-->  collecteur syslog-ng  -->  Elasticsearch  -->  Kibana
 ```
 
 Schéma détaillé : [docs/architecture.md](docs/architecture.md).
 
 ## Composants
 
-| Composant          | Emplacement                  | Version  |
-|--------------------|------------------------------|----------|
-| Elasticsearch      | Docker, VM `siem-ids`        | 8.19.23  |
-| Kibana             | Docker, VM `siem-ids`        | 8.19.23  |
-| syslog-ng collecteur | natif, VM `siem-ids`       | 4.8.1    |
-| syslog-ng clients  | VM IDS et VM serveur web     |          |
-| IDS                | VM IDS                       | 3.12.2.0 (libdaq 3.0.27)          |
+| Composant            | Emplacement                       | Version                  |
+|----------------------|-----------------------------------|--------------------------|
+| Elasticsearch        | Docker, VM `siem-ids`             | 8.19.23                  |
+| Kibana               | Docker, VM `siem-ids`             | 8.19.23                  |
+| syslog-ng collecteur | natif, VM `siem-ids`              | 4.8.1                    |
+| syslog-ng client     | natif, VM victime                 |                          |
+| IDS : Snort 3        | compilé, VM victime (serveur web) | 3.12.2.0 (libdaq 3.0.27) |
 
 ## Arborescence
 
@@ -49,9 +49,24 @@ sudo ./scripts/install-collector.sh
 
 Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://localhost:5601`.
 
+## Mise en place rapide (VM victime)
+
+```bash
+sudo ./scripts/install-snort.sh                      # Snort 3, libdaq, règles communautaires
+sudo cp configs/snort/local.lua /usr/local/etc/snort/
+sudo cp configs/snort/local.rules /usr/local/etc/rules/
+sudo snort -c /usr/local/etc/snort/snort.lua --tweaks local -T
+sudo cp configs/snort/snort3.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now snort3
+sudo apt-get install -y syslog-ng-core               # client : envoi des alertes au SIEM
+```
+
+Détails : [docs/installation/01-snort.md](docs/installation/01-snort.md).
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Installation et configuration de Snort 3](docs/installation/01-snort.md)
 - [Installation de syslog-ng (collecteur et clients)](docs/installation/02-syslog-ng.md)
 - [Installation d'Elasticsearch et Kibana](docs/installation/03-elk.md)
 - [Visualisation](docs/visualisation.md)
@@ -62,7 +77,7 @@ Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://
 
 - **Pourquoi Snort 3** : Snort 2.9 (paquet apt) est en fin de vie et n'a pas de sortie `alert_json`, attendue par le collecteur.
 - **Pourquoi sur la victime** : il voit toutes les attaques qui la visent, sans VM supplémentaire ni mode promiscuous. Limite : il ne protège que cet hôte ; un capteur dédié ou un routeur en mode IPS serait plus réaliste.
-- **Règles** : 13 règles locales (SID 1000001 à 1000012), au moins une par scénario. Les messages commencent par `LOCAL` et contiennent le mot utilisé par le panneau du scénario dans le dashboard.
+- **Règles** : règles communautaires Snort 3 + 12 règles locales (SID 1000001 à 1000012), au moins une par scénario. Les messages commencent par `LOCAL` et contiennent le mot utilisé par le panneau du scénario dans le dashboard.
 - **Configuration** : `snort.lua` d'origine inchangé, réglages du projet dans `local.lua` (chargé avec `--tweaks local`) : `HOME_NET`, inspecteur `port_scan`, sortie `alert_json`, limitation des alertes des règles à seuil.
 
 Installation, configuration, règles et problèmes rencontrés : [docs/installation/01-snort.md](docs/installation/01-snort.md).
@@ -80,7 +95,6 @@ Installation, configuration, règles et problèmes rencontrés : [docs/installat
 | 5 | Flood ICMP          | echo request à seuil (1000012)                                              | `ids-alerts-*`             |
 
 ## Alertes et notifications
-
 
 Le script `scripts/alerting/watch-alerts.py` interroge Elasticsearch toutes les 30 s et envoie une notification sur un salon Discord (webhook) pour chaque alerte jugée critique.
 
@@ -111,4 +125,3 @@ journalctl -u siem-alerting.service -f
 ```
 
 **Test** : indexer une alerte factice de priorité 1 dans `ids-alerts-test` avec l'utilisateur `elastic`. La notification arrive sur Discord en moins de 30 s. Supprimer ensuite l'index de test.
-

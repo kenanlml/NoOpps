@@ -1,6 +1,6 @@
 # Détection d'intrusions et gestion de logs
 
-Projet universitaire en équipe. Un IDS (Snort 3 ou Suricata) détecte cinq scénarios d'intrusion. Ses alertes et les logs du serveur web victime sont centralisés par syslog-ng, stockés dans Elasticsearch et visualisés dans Kibana.
+Projet universitaire en équipe. Un IDS (Snort 3) détecte cinq scénarios d'intrusion. Ses alertes et les logs du serveur web victime sont centralisés par syslog-ng, stockés dans Elasticsearch et visualisés dans Kibana.
 
 ```
 IDS / serveur web  --syslog-ng (601/tcp)-->  collecteur syslog-ng  -->  Elasticsearch  -->  Kibana
@@ -16,18 +16,18 @@ Schéma détaillé : [docs/architecture.md](docs/architecture.md).
 | Kibana             | Docker, VM `siem-ids`        | 8.19.23  |
 | syslog-ng collecteur | natif, VM `siem-ids`       | 4.8.1    |
 | syslog-ng clients  | VM IDS et VM serveur web     |          |
-| IDS                | VM IDS                       |          |
+| IDS                | VM IDS                       | 3.12.2.0 (libdaq 3.0.27)          |
 
 ## Arborescence
 
 ```
 configs/syslog-ng/       collector.conf, client-ids.conf, client-web.conf
 configs/elasticsearch/   template d'index, rôles syslog-ng et lecture seule
+configs/snort/           local.lua (réglages), local.rules (règles des 5 scénarios), snort3.service
 kibana/                  export du dashboard (dashboard.ndjson)
 scripts/                 setup-elasticsearch.sh, install-collector.sh,
                          create-data-views.sh, create-viewer.sh, demo-data.py,
-                         import-dashboard.sh
-scripts/alerting/        watch-alerts.py, siem-alerting.service (notifications Discord)
+                         import-dashboard.sh, install-snort.sh
 scripts/alerting/        watch-alerts.py, siem-alerting.service (notifications Discord)
 docs/                    architecture, installation, visualisation
 screenshots/             captures Kibana
@@ -58,19 +58,26 @@ Accès à Kibana : `ssh -L 5601:127.0.0.1:5601 kenan@100.80.61.14` puis `http://
 
 ## IDS
 
-> À compléter (partie IDS) : choix de l'IDS, installation, règles.
+**Snort 3** (3.12.2.0), compilé depuis les sources sur la VM victime. Il écoute l'interface du réseau du lab (`enp0s8`, réseau host-only partagé avec Kali) et écrit ses alertes en JSON dans `/var/log/snort/alert_json.txt`. Un client syslog-ng les envoie au collecteur de `siem-ids`, qui les range dans l'index `ids-alerts-*`.
+
+- **Pourquoi Snort 3** : Snort 2.9 (paquet apt) est en fin de vie et n'a pas de sortie `alert_json`, attendue par le collecteur.
+- **Pourquoi sur la victime** : il voit toutes les attaques qui la visent, sans VM supplémentaire ni mode promiscuous. Limite : il ne protège que cet hôte ; un capteur dédié ou un routeur en mode IPS serait plus réaliste.
+- **Règles** : 13 règles locales (SID 1000001 à 1000012), au moins une par scénario. Les messages commencent par `LOCAL` et contiennent le mot utilisé par le panneau du scénario dans le dashboard.
+- **Configuration** : `snort.lua` d'origine inchangé, réglages du projet dans `local.lua` (chargé avec `--tweaks local`) : `HOME_NET`, inspecteur `port_scan`, sortie `alert_json`, limitation des alertes des règles à seuil.
+
+Installation, configuration, règles et problèmes rencontrés : [docs/installation/01-snort.md](docs/installation/01-snort.md).
 
 ## Scénarios d'intrusion
 
 > À compléter (partie scénarios) : description des cinq scénarios, outils utilisés, résultats attendus.
 
-| # | Scénario | Détection | Index |
-|---|----------|-----------|-------|
-| 1 |          |           |       |
-| 2 |          |           |       |
-| 3 |          |           |       |
-| 4 |          |           |       |
-| 5 |          |           |       |
+| # | Scénario            | Détection (Snort)                                                            | Index                      |
+|---|---------------------|------------------------------------------------------------------------------|----------------------------|
+| 1 | Scan de ports       | SYN à seuil (sid 1000001), User-Agent Nmap (1000002), inspecteur `port_scan` | `ids-alerts-*`             |
+| 2 | Brute-force SSH     | connexions vers 22/tcp à seuil (1000003) ; échecs dans `auth.log`            | `ids-alerts-*`, `syslog-*` |
+| 3 | Injection SQL / XSS | `union select`, `' or 1=1`, sqlmap, `<script` (1000004 à 1000008)           | `ids-alerts-*`, `web-*`    |
+| 4 | Exploit HTTP        | CVE-2021-41773, `/etc/passwd`, Shellshock (1000009 à 1000011)                | `ids-alerts-*`, `web-*`    |
+| 5 | Flood ICMP          | echo request à seuil (1000012)                                              | `ids-alerts-*`             |
 
 ## Alertes et notifications
 

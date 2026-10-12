@@ -1,0 +1,26 @@
+# test
+# alert icmp any any -> $HOME_NET any (msg:"TEST ping recu"; itype:8; classtype:misc-activity; sid:1000000; rev:1;)
+
+# 1. Scan de ports
+alert tcp any any -> $HOME_NET any (msg:"LOCAL SCAN SYN scan de ports"; flags:S; detection_filter:track by_src, count 20, seconds 3; classtype:attempted-recon; sid:1000001; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL SCAN nmap NSE sur le serveur web"; flow:to_server,established; http_header:field user-agent; content:"Nmap",nocase; classtype:attempted-recon; sid:1000002; rev:1;)
+
+# 2. Brute-force SSH
+alert tcp any any -> $HOME_NET 22 (msg:"LOCAL SSH brute force possible"; flags:S; detection_filter:track by_src, count 5, seconds 60; classtype:attempted-admin; sid:1000003; rev:1;)
+
+# 3. Injection SQL / XSS
+alert http any any -> $HOME_NET any (msg:"LOCAL SQL injection UNION SELECT"; flow:to_server,established; http_uri; content:"union",nocase; content:"select",nocase,distance 0; classtype:web-application-attack; sid:1000004; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL SQL injection OR 1=1"; flow:to_server,established; http_uri; pcre:"/'\s*or\s*'?1'?\s*=\s*'?1/i"; classtype:web-application-attack; sid:1000005; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL SQL injection outil sqlmap"; flow:to_server,established; http_header:field user-agent; content:"sqlmap",nocase; classtype:web-application-attack; sid:1000006; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL XSS balise script dans l'URI"; flow:to_server,established; http_uri; content:"<script",nocase; classtype:web-application-attack; sid:1000007; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL XSS balise script dans le formulaire"; flow:to_server,established; http_client_body; content:"<script",nocase; classtype:web-application-attack; sid:1000008; rev:1;)
+
+# 4. Exploit HTTP
+alert http any any -> $HOME_NET any (msg:"LOCAL EXPLOIT path traversal CVE-2021-41773"; flow:to_server,established; http_raw_uri; content:".%2e/",nocase; classtype:web-application-attack; sid:1000009; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL EXPLOIT lecture de /etc/passwd"; flow:to_server,established; http_uri; content:"/etc/passwd",nocase; classtype:web-application-attack; sid:1000010; rev:1;)
+alert http any any -> $HOME_NET any (msg:"LOCAL EXPLOIT Shellshock CVE-2014-6271"; flow:to_server,established; http_header; content:"() {"; classtype:web-application-attack; sid:1000011; rev:1;)
+
+# 5. Flood ICMP
+alert icmp any any -> $HOME_NET any (msg:"LOCAL FLOOD ICMP ping flood"; itype:8; detection_filter:track by_dst, count 100, seconds 1; classtype:attempted-dos; sid:1000012; rev:1;)
+
+alert tcp any any -> $HOME_NET 80 (msg:"LOCAL DOS TCP SYN flood"; flags:S; detection_filter:track by_src, count 200, seconds 1; classtype:attempted-dos; sid:1000013; rev:2;)
